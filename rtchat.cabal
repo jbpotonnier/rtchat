@@ -17,6 +17,12 @@ executable rtchat
   main-is:             Main.hs
   default-language:    Haskell2010
   build-depends:       base >= 4.7 && < 5
-                     , rethinkdb
+                     , websockets
+                     , warp
+                     , Spock
                      , aeson
+                     , rethinkdb
                      , text
+                     , wai-extra
+                     , wai-websockets
+                     , wai-middleware-static
