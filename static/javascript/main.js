@@ -6,9 +6,9 @@ chat.Message = function (data) {
 
 chat.Messages = Array;
 
-chat.vm = {
+chat.state = {
     init: function () {
-        chat.vm.messages = new chat.Messages();
+        chat.state.messages = new chat.Messages();
 
         var websocket = new WebSocket('ws://localhost:3000');
         
@@ -19,28 +19,24 @@ chat.vm = {
         websocket.onerror = function(event) { alert(evt) };
         
         websocket.onmessage = function(event) {
-            chat.vm.messages.push(new chat.Message({text: event.data}));
+            chat.state.messages.push(new chat.Message({text: event.data}));
             m.redraw();
         };
     }
 };
 
 chat.controller = function () {
-    chat.vm.init();
+    chat.state.init();
 };
 
-chat.view = function () {
-    return m("html", [
+chat.view = () => 
+    m("html", [
         m("body", [
             m("ul", 
-              chat.vm.messages.map(function(message) {
-                  return m("li", [message.text()]);
-              })
+              chat.state.messages.map(message => m("li", [message.text()]))
              )
         ])
     ]);
-};
-
 
 m.mount(document, {controller: chat.controller, view: chat.view});
 
