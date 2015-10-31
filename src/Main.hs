@@ -1,11 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+
 module Main where
 
 import           Message                              (Message (..),
-                                                       findMessagesByRecipient)
+                                                       findMessagesByRecipient,
+                                                       findMessagesByRecipientChanges,
+                                                       insertMessage)
 
-import qualified Data.Text.IO                         as TextIO
+import           Control.Exception                    (bracket)
 import qualified Database.RethinkDB                   as R
 
 import qualified Network.Wai.Handler.Warp             as Warp
@@ -16,16 +19,44 @@ import           Network.Wai.Middleware.RequestLogger (logStdoutDev)
 import           Network.Wai.Middleware.Static
 import           Web.Spock
 
-appMiddleware :: SpockT IO ()
+connectToRethinkDB :: IO R.RethinkDBHandle
+connectToRethinkDB =
+  let database = R.db "test" in do
+    h <- R.connect "localhost" 28015 Nothing
+    let _ = R.use database h
+    return h
+
+dbConn :: PoolOrConn R.RethinkDBHandle
+dbConn =
+  PCConn (ConnBuilder
+          connectToRethinkDB
+          R.close
+          (PoolCfg 5 5 60)
+         )
+
+appMiddleware :: SpockT (WebStateM R.RethinkDBHandle () ()) ()
 appMiddleware = do
   middleware logStdoutDev
   middleware $ staticPolicy (noDots >-> addBase "static")
 
-appRoutes :: SpockT IO ()
-appRoutes =
-  get root $
-   text "OK"
 
+appRoutes :: SpockT (WebStateM R.RethinkDBHandle () ()) ()
+appRoutes = do
+  post "message" insertMessageAction
+
+  get "message" listMessagesAction
+
+
+insertMessageAction :: ActionT (WebStateM R.RethinkDBHandle () ()) ()
+insertMessageAction = do
+  message <- jsonBody'
+  runQuery $ insertMessage message
+  json message
+
+listMessagesAction :: ActionT (WebStateM R.RethinkDBHandle () ()) ()
+listMessagesAction = do
+  messages <- runQuery $ \h -> findMessagesByRecipient "jb" h
+  json messages
 
 wsapp :: WS.ServerApp
 wsapp pending = do
@@ -34,20 +65,16 @@ wsapp pending = do
   sendMessages conn
 
 sendMessages :: WS.Connection -> IO ()
-sendMessages conn = do
-  h <- R.connect "localhost" 28015 Nothing
-  let database = R.db "test"
-  let _ = R.use database h
-  messageCursor <- findMessagesByRecipient h "jb"
-  R.each messageCursor $
-    \ m -> do
-      TextIO.putStrLn (getText m)
-      WS.sendTextData conn (getText m)
-  R.close h
+sendMessages conn =
+  bracket connectToRethinkDB R.close
+  (\h -> do
+      messageCursor <- findMessagesByRecipientChanges  "jb" h
+      R.each messageCursor $
+        \m -> WS.sendTextData conn (getText m))
 
 main :: IO ()
 main = do
-  app <- spockAsApp $ spockT id $ appMiddleware >> appRoutes
+  app <- spockAsApp $ spock (defaultSpockCfg () dbConn ())  $ appMiddleware >> appRoutes
   Warp.runSettings
         (Warp.setPort 3000 Warp.defaultSettings)
         (WaiWS.websocketsOr WS.defaultConnectionOptions wsapp app)

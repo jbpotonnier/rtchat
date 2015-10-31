@@ -6,6 +6,7 @@ module Message
        , initSchema
        , insertMessage
        , findMessagesByRecipient
+       , findMessagesByRecipientChanges
        ) where
 
 import           Control.Monad              (mzero, void, when)
@@ -41,13 +42,21 @@ messageTable = table "messages"
 messageRecipientIndex :: Index
 messageRecipientIndex = Index "message_recipient_index"
 
-insertMessage :: RethinkDBHandle -> Message -> IO ()
-insertMessage h m = (void . run' h) $ messageTable # insert m
+insertMessage :: Message -> RethinkDBHandle -> IO ()
+insertMessage m h = (void . run' h) $ messageTable # insert m
 
-findMessagesByRecipient :: RethinkDBHandle -> String -> IO (Cursor Message)
-findMessagesByRecipient h recipient =
-  run h $ (messageTable # getAll messageRecipientIndex [recipient] # changes) ! "new_val"
+findMessagesByRecipient :: Text -> RethinkDBHandle -> IO [Message]
+findMessagesByRecipient recipient h =
+  run h $ findMessagesByRecipientQuery recipient
 
+findMessagesByRecipientChanges :: Text -> RethinkDBHandle -> IO (Cursor Message)
+findMessagesByRecipientChanges recipient h =
+  run h $ (findMessagesByRecipientQuery recipient # changes) ! "new_val"
+
+findMessagesByRecipientQuery :: Text -> ReQL
+findMessagesByRecipientQuery recipient =
+   messageTable # getAll messageRecipientIndex [recipient]
+   
 initSchema :: RethinkDBHandle -> Database -> IO ()
 initSchema h database = do
   tables <- (run h $ tableList database) :: IO [String]
