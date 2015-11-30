@@ -56,12 +56,13 @@ findMessagesByRecipientChanges recipient h =
 findMessagesByRecipientQuery :: Text -> ReQL
 findMessagesByRecipientQuery recipient =
    messageTable # getAll messageRecipientIndex [recipient]
-   
+
 initSchema :: RethinkDBHandle -> Database -> IO ()
 initSchema h database = do
   tables <- (run h $ tableList database) :: IO [String]
   when ("messages" `elem` tables) $
     (void . run' h) $ messageTable # tableDrop
   (void . run' h) $ messageTable # tableCreate
-  (void . run' h) $ messageTable # indexCreate "message_recipient_index" (! "recipient")
+  (void . run' h) $
+    messageTable # indexCreate "message_recipient_index" (! "recipient")
   (void . run' h) $ messageTable # indexWait []
