@@ -4,8 +4,7 @@
 module Main where
 
 import           Message                              (Message (..),
-                                                       findMessagesByRecipient,
-                                                       findMessagesByRecipientChanges,
+                                                       findMessagesByRecipient, findMessagesByRecipientChanges,
                                                        insertMessage)
 
 import           Control.Exception                    (bracket)
@@ -74,7 +73,7 @@ sendMessages conn =
 
 main :: IO ()
 main = do
-  app <- spockAsApp $ spock (defaultSpockCfg () dbConn ())  $ appMiddleware >> appRoutes
+  app <- spockAsApp $ spock (defaultSpockCfg () dbConn ()) $ appMiddleware >> appRoutes
   Warp.runSettings
         (Warp.setPort 3000 Warp.defaultSettings)
         (WaiWS.websocketsOr WS.defaultConnectionOptions wsapp app)
